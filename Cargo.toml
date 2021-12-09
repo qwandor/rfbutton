@@ -7,3 +7,4 @@ description = "A library for decoding 433 MHz RF remote codes."
 repository = "https://github.com/qwandor/rfbutton/"
 
 [dependencies]
+thiserror = "1.0.30"
