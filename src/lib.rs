@@ -10,16 +10,21 @@ use thiserror::Error;
 
 const BREAK_PULSE_LENGTH: u16 = 3000;
 
+/// An error decoding an RF button code.
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
 pub enum Error {
+    /// The start pulse of the code sequence couldn't be found.
     #[error("Couldn't find start pulse")]
     NoStart,
+    /// There were not enough pulses to decode the code.
     #[error("Too few pulses")]
     TooShort,
+    /// A pair of pulses in the code were of an unexpected length.
     #[error("Invalid pulse length ({0} μs high {1} μs low)")]
     InvalidPulseLength(u16, u16),
 }
 
+/// A decoded RF button code.
 #[derive(Clone, Eq, PartialEq)]
 pub struct Code {
     /// The decoded value.
