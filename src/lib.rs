@@ -28,9 +28,9 @@ pub enum Error {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Code {
     /// The decoded value.
-    value: u32,
+    pub value: u32,
     /// The length in bits.
-    length: u8,
+    pub length: u8,
 }
 
 impl Debug for Code {
