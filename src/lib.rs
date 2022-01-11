@@ -16,7 +16,7 @@ pub enum Error {
     NoStart,
     #[error("Too few pulses")]
     TooShort,
-    #[error("Invalid pulse length {0}")]
+    #[error("Invalid pulse length ({0} μs high {1} μs low)")]
     InvalidPulseLength(u16, u16),
 }
 
