@@ -11,3 +11,11 @@ categories = ["hardware-support", "parser-implementations"]
 
 [dependencies]
 thiserror = "1.0.30"
+
+[dev-dependencies]
+color-backtrace = "0.6.1"
+color-eyre = "0.6.2"
+eyre = "0.6.9"
+log = "0.4.20"
+pretty_env_logger = "0.5.0"
+rppal = "0.15.0"
