@@ -78,7 +78,7 @@ pub fn decode(pulses: &[u16]) -> Result<Code, Error> {
         } else if high > BREAK_PULSE_LENGTH || low > BREAK_PULSE_LENGTH {
             break;
         } else {
-            return Err(Error::InvalidPulseLength(high_period, low_period));
+            return Err(Error::InvalidPulseLength(high, low));
         }
     }
 
