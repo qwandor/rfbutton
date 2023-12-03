@@ -17,7 +17,7 @@ use rppal::gpio::{Gpio, InputPin, Level, Trigger};
 
 /// The GPIO pin to which the 433 MHz receiver's data pin is connected.
 const RX_PIN: u8 = 27;
-const CS_PIN: u64 = 0; // TODO
+const CS_PIN: u64 = 8;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
 const BREAK_PULSE_LENGTH: Duration = Duration::from_millis(7);
