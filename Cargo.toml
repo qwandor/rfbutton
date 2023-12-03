@@ -13,9 +13,11 @@ categories = ["hardware-support", "parser-implementations"]
 thiserror = "1.0.30"
 
 [dev-dependencies]
+cc1101 = { path = "../cc1101" }
 color-backtrace = "0.6.1"
 color-eyre = "0.6.2"
 eyre = "0.6.9"
+linux-embedded-hal = "0.3.2"
 log = "0.4.20"
 pretty_env_logger = "0.5.0"
-rppal = "0.15.0"
+rppal = { version = "0.15.0", features = ["embedded-hal"] }

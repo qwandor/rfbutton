@@ -4,13 +4,20 @@
 
 use std::time::{Duration, Instant};
 
-use eyre::{bail, Context, Report};
+use cc1101::{lowlevel::registers::Config, Cc1101};
+use eyre::{bail, eyre, Context, Report};
+use linux_embedded_hal::{
+    spidev::{SpiModeFlags, SpidevOptions},
+    sysfs_gpio::Direction,
+    Spidev, SysfsPin,
+};
 use log::{debug, trace};
 use rfbutton::decode;
 use rppal::gpio::{Gpio, InputPin, Level, Trigger};
 
 /// The GPIO pin to which the 433 MHz receiver's data pin is connected.
 const RX_PIN: u8 = 27;
+const CS_PIN: u64 = 0; // TODO
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
 const BREAK_PULSE_LENGTH: Duration = Duration::from_millis(7);
@@ -22,6 +29,77 @@ fn main() -> Result<(), Report> {
 
     let gpio = Gpio::new()?;
     let mut rx_pin = gpio.get(RX_PIN)?.into_input();
+
+    //let cs = gpio.get(CS_PIN)?.into_output();
+    let cs = SysfsPin::new(CS_PIN);
+    cs.export()?;
+    cs.set_direction(Direction::High)?;
+    let mut spi = Spidev::open("/dev/spidev0.0")?;
+    spi.configure(
+        &SpidevOptions::new()
+            .bits_per_word(8)
+            .max_speed_hz(1_000_000)
+            .mode(SpiModeFlags::SPI_MODE_0)
+            .build(),
+    )?;
+    let mut cc1101 =
+        Cc1101::new(spi, cs).map_err(|e| eyre!("Error creating CC1101 device: {:?}", e))?;
+    let (partnum, version) = cc1101
+        .get_hw_info()
+        .map_err(|e| eyre!("Error getting hardware info: {:?}", e))?;
+    println!("Part number {}, version {}", partnum, version);
+    cc1101
+        .set_frequency(433940000)
+        .map_err(|e| eyre!("Error setting frequency: {:?}", e))?;
+
+    // Serial data output.
+    cc1101.0.write_register(Config::IOCFG0, 0x0d).unwrap();
+    // Disable data whitening and CRC, fixed packet length.
+    cc1101.0.write_register(Config::PKTCTRL0, 0x00).unwrap();
+    // This seems unneccessary.
+    // cc1101.0.write_register(Config::PKTCTRL1, 0x06).unwrap();
+    cc1101.0.write_register(Config::PKTLEN, 0x04).unwrap();
+    // Frequency synthesizer offset
+    cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
+    // Frequency synthesizer IF 211 kHz
+    cc1101.0.write_register(Config::FSCTRL1, 0x06).unwrap();
+    // Channel spacing. (Seems irrelevant, default value.)
+    cc1101.0.write_register(Config::MDMCFG0, 0xf8).unwrap();
+    // FEC disabled, 4 preamble bytes, 2 bit exponent of channel spacing. (Seems irrelevant, default value.)
+    cc1101.0.write_register(Config::MDMCFG1, 0x22).unwrap();
+    // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
+    cc1101.0.write_register(Config::MDMCFG2, 0x30).unwrap();
+    // Channel bandwidth and data rate.
+    cc1101.0.write_register(Config::MDMCFG3, 0x32).unwrap();
+    cc1101.0.write_register(Config::MDMCFG4, 0xa4).unwrap();
+    // Automatically calibrate when going from IDLE to RX or TX, XOSC stable timeout 64.
+    cc1101.0.write_register(Config::MCSM0, 0x18).unwrap();
+    // Clear channel indication always, RX off mode idle, TX off mode idle.
+    cc1101.0.write_register(Config::MCSM1, 0x00).unwrap();
+    // RX timeout. (Seems irrelevant, default value.)
+    cc1101.0.write_register(Config::MCSM2, 0x07).unwrap();
+    // Medium hysteresis, 18 channel filter samples, normal operation, OOK decision boundary 12 dB
+    cc1101.0.write_register(Config::AGCCTRL0, 0x92).unwrap();
+    // LNA2 gain decreased first, relavite carrier sense threshold disabled, absolute RSSI threshold at target setting.
+    cc1101.0.write_register(Config::AGCCTRL1, 0x00).unwrap();
+    // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
+    // TODO: Or 0x07?
+    cc1101.0.write_register(Config::AGCCTRL2, 0x04).unwrap();
+    // Front-end TX current configuration.
+    cc1101.0.write_register(Config::FREND0, 0x11).unwrap();
+    // Front-end RX current configuration.
+    cc1101.0.write_register(Config::FREND1, 0xb6).unwrap();
+    // Frequency synthesiser calibration.
+    cc1101.0.write_register(Config::FSCAL0, 0x1f).unwrap();
+    cc1101.0.write_register(Config::FSCAL1, 0x00).unwrap();
+    cc1101.0.write_register(Config::FSCAL2, 0x2a).unwrap();
+    cc1101.0.write_register(Config::FSCAL3, 0xe9).unwrap();
+    // Test settings.
+    cc1101.0.write_register(Config::TEST0, 0x09).unwrap();
+    cc1101.0.write_register(Config::TEST1, 0x35).unwrap();
+    cc1101.0.write_register(Config::TEST2, 0x81).unwrap();
+
+    println!("Set up CC1101, enabling interrupts...");
 
     rx_pin.set_interrupt(Trigger::Both)?;
 
