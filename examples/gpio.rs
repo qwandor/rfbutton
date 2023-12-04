@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use cc1101::{lowlevel::registers::Config, Cc1101};
+use cc1101::{lowlevel::registers::Config, Cc1101, RadioMode};
 use eyre::{bail, eyre, Context, Report};
 use linux_embedded_hal::{
     spidev::{SpiModeFlags, SpidevOptions},
@@ -17,7 +17,7 @@ use rppal::gpio::{Gpio, InputPin, Level, Trigger};
 
 /// The GPIO pin to which the 433 MHz receiver's data pin is connected.
 const RX_PIN: u8 = 27;
-const CS_PIN: u64 = 8;
+const CS_PIN: u64 = 25;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
 const BREAK_PULSE_LENGTH: Duration = Duration::from_millis(7);
@@ -54,10 +54,8 @@ fn main() -> Result<(), Report> {
 
     // Serial data output.
     cc1101.0.write_register(Config::IOCFG0, 0x0d).unwrap();
-    // Disable data whitening and CRC, fixed packet length.
-    cc1101.0.write_register(Config::PKTCTRL0, 0x00).unwrap();
-    // This seems unneccessary.
-    // cc1101.0.write_register(Config::PKTCTRL1, 0x06).unwrap();
+    // Disable data whitening and CRC, fixed packet length, asynchronous serial mode.
+    cc1101.0.write_register(Config::PKTCTRL0, 0x30).unwrap();
     cc1101.0.write_register(Config::PKTLEN, 0x04).unwrap();
     // Frequency synthesizer offset
     cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
@@ -70,8 +68,8 @@ fn main() -> Result<(), Report> {
     // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
     cc1101.0.write_register(Config::MDMCFG2, 0x30).unwrap();
     // Channel bandwidth and data rate.
-    cc1101.0.write_register(Config::MDMCFG3, 0x32).unwrap();
-    cc1101.0.write_register(Config::MDMCFG4, 0xa4).unwrap();
+    cc1101.set_chanbw(232_000).unwrap();
+    cc1101.set_data_rate(3_000).unwrap();
     // Automatically calibrate when going from IDLE to RX or TX, XOSC stable timeout 64.
     cc1101.0.write_register(Config::MCSM0, 0x18).unwrap();
     // Clear channel indication always, RX off mode idle, TX off mode idle.
@@ -83,8 +81,8 @@ fn main() -> Result<(), Report> {
     // LNA2 gain decreased first, relavite carrier sense threshold disabled, absolute RSSI threshold at target setting.
     cc1101.0.write_register(Config::AGCCTRL1, 0x00).unwrap();
     // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
-    // TODO: Or 0x07?
-    cc1101.0.write_register(Config::AGCCTRL2, 0x04).unwrap();
+    // TODO: 0x04 or 0x07?
+    cc1101.0.write_register(Config::AGCCTRL2, 0x07).unwrap();
     // Front-end TX current configuration.
     cc1101.0.write_register(Config::FREND0, 0x11).unwrap();
     // Front-end RX current configuration.
@@ -98,6 +96,7 @@ fn main() -> Result<(), Report> {
     cc1101.0.write_register(Config::TEST0, 0x09).unwrap();
     cc1101.0.write_register(Config::TEST1, 0x35).unwrap();
     cc1101.0.write_register(Config::TEST2, 0x81).unwrap();
+    cc1101.set_radio_mode(RadioMode::Receive).unwrap();
 
     println!("Set up CC1101, enabling interrupts...");
 
