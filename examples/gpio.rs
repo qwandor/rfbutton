@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use cc1101::{lowlevel::registers::Config, Cc1101, RadioMode};
+use cc1101::{lowlevel::registers::Config, Cc1101, Modulation, RadioMode, SyncMode};
 use eyre::{bail, eyre, Context, Report};
 use linux_embedded_hal::{
     spidev::{SpiModeFlags, SpidevOptions},
@@ -44,6 +44,7 @@ fn main() -> Result<(), Report> {
     )?;
     let mut cc1101 =
         Cc1101::new(spi, cs).map_err(|e| eyre!("Error creating CC1101 device: {:?}", e))?;
+    cc1101.reset().unwrap();
     let (partnum, version) = cc1101
         .get_hw_info()
         .map_err(|e| eyre!("Error getting hardware info: {:?}", e))?;
@@ -57,16 +58,17 @@ fn main() -> Result<(), Report> {
     // Disable data whitening and CRC, fixed packet length, asynchronous serial mode.
     cc1101.0.write_register(Config::PKTCTRL0, 0x30).unwrap();
     cc1101.0.write_register(Config::PKTLEN, 0x04).unwrap();
-    // Frequency synthesizer offset
-    cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
+    // Frequency synthesizer offset (0x00 reset value).
+    //cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
     // Frequency synthesizer IF 211 kHz
     cc1101.0.write_register(Config::FSCTRL1, 0x06).unwrap();
     // Channel spacing. (Seems irrelevant, default value.)
-    cc1101.0.write_register(Config::MDMCFG0, 0xf8).unwrap();
+    //cc1101.0.write_register(Config::MDMCFG0, 0xf8).unwrap();
     // FEC disabled, 4 preamble bytes, 2 bit exponent of channel spacing. (Seems irrelevant, default value.)
-    cc1101.0.write_register(Config::MDMCFG1, 0x22).unwrap();
+    //cc1101.0.write_register(Config::MDMCFG1, 0x22).unwrap();
     // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
-    cc1101.0.write_register(Config::MDMCFG2, 0x30).unwrap();
+    cc1101.set_sync_mode(SyncMode::Disabled).unwrap();
+    cc1101.set_modulation(Modulation::OnOffKeying).unwrap();
     // Channel bandwidth and data rate.
     cc1101.set_chanbw(232_000).unwrap();
     cc1101.set_data_rate(3_000).unwrap();
