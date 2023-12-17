@@ -13,7 +13,7 @@ categories = ["hardware-support", "parser-implementations"]
 thiserror = "1.0.30"
 
 [dev-dependencies]
-cc1101 = { path = "../cc1101" }
+cc1101 = { git = "https://github.com/qwandor/cc1101", features = ["std"] }
 color-backtrace = "0.6.1"
 color-eyre = "0.6.2"
 eyre = "0.6.9"
