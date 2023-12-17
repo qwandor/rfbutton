@@ -17,7 +17,6 @@ cc1101 = { git = "https://github.com/qwandor/cc1101", features = ["std"] }
 color-backtrace = "0.6.1"
 color-eyre = "0.6.2"
 eyre = "0.6.9"
-linux-embedded-hal = "0.3.2"
 log = "0.4.20"
 pretty_env_logger = "0.5.0"
-rppal = { version = "0.15.0", features = ["embedded-hal"] }
+rppal = { version = "0.16.0", features = ["hal"] }

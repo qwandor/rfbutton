@@ -9,18 +9,16 @@ use cc1101::{
     TargetAmplitude,
 };
 use eyre::{bail, Context, Report};
-use linux_embedded_hal::{
-    spidev::{SpiModeFlags, SpidevOptions},
-    sysfs_gpio::Direction,
-    Spidev, SysfsPin,
-};
 use log::{debug, trace};
 use rfbutton::decode;
-use rppal::gpio::{Gpio, InputPin, Level, Trigger};
+use rppal::{
+    gpio::{Gpio, InputPin, Level, Trigger},
+    spi::{Bus, Mode, SlaveSelect, Spi},
+};
 
 /// The GPIO pin to which the 433 MHz receiver's data pin is connected.
 const RX_PIN: u8 = 27;
-const CS_PIN: u64 = 25;
+const CS_PIN: u8 = 25;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
 const BREAK_PULSE_LENGTH: Duration = Duration::from_millis(7);
@@ -33,20 +31,10 @@ fn main() -> Result<(), Report> {
     let gpio = Gpio::new()?;
     let mut rx_pin = gpio.get(RX_PIN)?.into_input();
 
-    //let cs = gpio.get(CS_PIN)?.into_output();
-    let cs = SysfsPin::new(CS_PIN);
-    cs.export()?;
-    cs.set_direction(Direction::High)?;
-    let mut spi = Spidev::open("/dev/spidev0.0")?;
-    spi.configure(
-        &SpidevOptions::new()
-            .bits_per_word(8)
-            .max_speed_hz(1_000_000)
-            .mode(SpiModeFlags::SPI_MODE_0)
-            .build(),
-    )?;
+    let cs = gpio.get(CS_PIN)?.into_output();
+    let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
     let mut cc1101 = Cc1101::new(spi, cs).wrap_err("Error creating CC1101 device")?;
-    cc1101.reset()?;
+    cc1101.reset().unwrap();
     let (partnum, version) = cc1101
         .get_hw_info()
         .wrap_err("Error getting hardware info")?;
