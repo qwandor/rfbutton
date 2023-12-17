@@ -8,7 +8,7 @@ use cc1101::{
     lowlevel::types::AutoCalibration, Cc1101, FilterLength, Modulation, RadioMode, SyncMode,
     TargetAmplitude,
 };
-use eyre::{bail, eyre, Context, Report};
+use eyre::{bail, Context, Report};
 use linux_embedded_hal::{
     spidev::{SpiModeFlags, SpidevOptions},
     sysfs_gpio::Direction,
@@ -45,41 +45,36 @@ fn main() -> Result<(), Report> {
             .mode(SpiModeFlags::SPI_MODE_0)
             .build(),
     )?;
-    let mut cc1101 =
-        Cc1101::new(spi, cs).map_err(|e| eyre!("Error creating CC1101 device: {:?}", e))?;
-    cc1101.reset().unwrap();
+    let mut cc1101 = Cc1101::new(spi, cs).wrap_err("Error creating CC1101 device")?;
+    cc1101.reset()?;
     let (partnum, version) = cc1101
         .get_hw_info()
-        .map_err(|e| eyre!("Error getting hardware info: {:?}", e))?;
+        .wrap_err("Error getting hardware info")?;
     println!("Part number {}, version {}", partnum, version);
     cc1101
         .set_frequency(433940000)
-        .map_err(|e| eyre!("Error setting frequency: {:?}", e))?;
-    cc1101.set_raw_mode().unwrap();
+        .wrap_err("Error setting frequency")?;
+    cc1101.set_raw_mode()?;
 
     // Frequency synthesizer IF 211 kHz. Doesn't seem to affect big button, but affects sensitivity to small remote.
-    cc1101.set_synthesizer_if(152_300).unwrap();
+    cc1101.set_synthesizer_if(152_300)?;
     // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
-    cc1101.set_sync_mode(SyncMode::Disabled).unwrap();
-    cc1101.set_modulation(Modulation::OnOffKeying).unwrap();
+    cc1101.set_sync_mode(SyncMode::Disabled)?;
+    cc1101.set_modulation(Modulation::OnOffKeying)?;
     // Channel bandwidth and data rate.
-    cc1101.set_chanbw(232_000).unwrap();
-    cc1101.set_data_rate(3_000).unwrap();
+    cc1101.set_chanbw(232_000)?;
+    cc1101.set_data_rate(3_000)?;
     // Automatically calibrate when going from IDLE to RX or TX.
     // XOSC stable timeout was being set to 64, but this doesn't seem important.
-    cc1101
-        .set_autocalibration(AutoCalibration::FromIdle)
-        .unwrap();
+    cc1101.set_autocalibration(AutoCalibration::FromIdle)?;
     // Medium hysteresis, 16 channel filter samples, normal operation, OOK decision boundary 12 dB. Seems to affect sensitivity to small remote.
-    cc1101
-        .set_agc_filter_length(FilterLength::Samples32)
-        .unwrap();
+    cc1101.set_agc_filter_length(FilterLength::Samples32)?;
     // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
-    // TODO: 36 dB or 42 dB.unwrap() 36 dB seems to let some noise through. Default value lets noise through all the time.
-    cc1101.set_agc_target(TargetAmplitude::Db42).unwrap();
+    // TODO: 36 dB or 42 dB? 36 dB seems to let some noise through. Default value lets noise through all the time.
+    cc1101.set_agc_target(TargetAmplitude::Db42)?;
     // Front-end RX current configuration. Unclear whether this affects sensitivity.
-    //cc1101.0.write_register(Config::FREND1, 0xb6).unwrap();
-    cc1101.set_radio_mode(RadioMode::Receive).unwrap();
+    //cc1101.0.write_register(Config::FREND1, 0xb6)?;
+    cc1101.set_radio_mode(RadioMode::Receive)?;
 
     println!("Set up CC1101, enabling interrupts...");
 
