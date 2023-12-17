@@ -57,15 +57,8 @@ fn main() -> Result<(), Report> {
         .map_err(|e| eyre!("Error setting frequency: {:?}", e))?;
     cc1101.set_raw_mode().unwrap();
 
-    //cc1101.0.write_register(Config::PKTLEN, 0x04).unwrap();
-    // Frequency synthesizer offset (0x00 reset value).
-    //cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
     // Frequency synthesizer IF 211 kHz. Doesn't seem to affect big button, but affects sensitivity to small remote.
     cc1101.set_synthesizer_if(152_300).unwrap();
-    // Channel spacing. (Seems irrelevant, default value.)
-    //cc1101.0.write_register(Config::MDMCFG0, 0xf8).unwrap();
-    // FEC disabled, 4 preamble bytes, 2 bit exponent of channel spacing. (Seems irrelevant, default value.)
-    //cc1101.0.write_register(Config::MDMCFG1, 0x22).unwrap();
     // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
     cc1101.set_sync_mode(SyncMode::Disabled).unwrap();
     cc1101.set_modulation(Modulation::OnOffKeying).unwrap();
@@ -77,32 +70,15 @@ fn main() -> Result<(), Report> {
     cc1101
         .set_autocalibration(AutoCalibration::FromIdle)
         .unwrap();
-    // Clear channel indication always, RX off mode idle, TX off mode idle.
-    //cc1101.0.write_register(Config::MCSM1, 0x00).unwrap();
-    // RX timeout. (Seems irrelevant, default value.)
-    //cc1101.0.write_register(Config::MCSM2, 0x07).unwrap();
     // Medium hysteresis, 16 channel filter samples, normal operation, OOK decision boundary 12 dB. Seems to affect sensitivity to small remote.
     cc1101
         .set_agc_filter_length(FilterLength::Samples32)
         .unwrap();
-    // LNA2 gain decreased first, relative carrier sense threshold disabled, absolute RSSI threshold at target setting.
-    //cc1101.0.write_register(Config::AGCCTRL1, 0x00).unwrap();
     // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
     // TODO: 36 dB or 42 dB.unwrap() 36 dB seems to let some noise through. Default value lets noise through all the time.
     cc1101.set_agc_target(TargetAmplitude::Db42).unwrap();
-    // Front-end TX current configuration.
-    //cc1101.0.write_register(Config::FREND0, 0x11).unwrap();
     // Front-end RX current configuration. Unclear whether this affects sensitivity.
     //cc1101.0.write_register(Config::FREND1, 0xb6).unwrap();
-    // Frequency synthesiser calibration.
-    /*cc1101.0.write_register(Config::FSCAL0, 0x1f).unwrap();
-    cc1101.0.write_register(Config::FSCAL1, 0x00).unwrap();
-    cc1101.0.write_register(Config::FSCAL2, 0x2a).unwrap();
-    cc1101.0.write_register(Config::FSCAL3, 0xe9).unwrap();*/
-    // Test settings.
-    /*cc1101.0.write_register(Config::TEST0, 0x09).unwrap();
-    cc1101.0.write_register(Config::TEST1, 0x35).unwrap();
-    cc1101.0.write_register(Config::TEST2, 0x81).unwrap();*/
     cc1101.set_radio_mode(RadioMode::Receive).unwrap();
 
     println!("Set up CC1101, enabling interrupts...");
