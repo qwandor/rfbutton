@@ -11,15 +11,14 @@ use cc1101::{
 use eyre::{bail, Context, Report};
 use linux_embedded_hal::{
     spidev::{SpiModeFlags, SpidevOptions},
-    sysfs_gpio::Direction,
+    sysfs_gpio::{Direction, Edge},
     Spidev, SysfsPin,
 };
 use log::{debug, trace};
 use rfbutton::decode;
-use rppal::gpio::{Gpio, InputPin, Level, Trigger};
 
 /// The GPIO pin to which the 433 MHz receiver's data pin is connected.
-const RX_PIN: u8 = 27;
+const RX_PIN: u64 = 27;
 const CS_PIN: u64 = 25;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
@@ -30,10 +29,8 @@ fn main() -> Result<(), Report> {
     pretty_env_logger::init();
     color_backtrace::install();
 
-    let gpio = Gpio::new()?;
-    let mut rx_pin = gpio.get(RX_PIN)?.into_input();
+    let rx_pin = SysfsPin::new(RX_PIN);
 
-    //let cs = gpio.get(CS_PIN)?.into_output();
     let cs = SysfsPin::new(CS_PIN);
     cs.export()?;
     cs.set_direction(Direction::High)?;
@@ -78,10 +75,10 @@ fn main() -> Result<(), Report> {
 
     println!("Set up CC1101, enabling interrupts...");
 
-    rx_pin.set_interrupt(Trigger::Both)?;
+    rx_pin.set_edge(Edge::BothEdges)?;
 
     loop {
-        match receive(&mut rx_pin) {
+        match receive(&rx_pin) {
             Ok(pulses) => {
                 if pulses.len() > 10 {
                     println!("{} pulses: {:?}...", pulses.len(), &pulses[0..10]);
@@ -112,9 +109,10 @@ fn main() -> Result<(), Report> {
 }
 
 /// Wait for a single code.
-fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
+fn receive(rx_pin: &SysfsPin) -> Result<Vec<u16>, Report> {
+    let mut poller = rx_pin.get_poller()?;
     debug!("Waiting for interrupt...");
-    let level = rx_pin.poll_interrupt(false, None)?;
+    let level = poller.poll(isize::MAX)?;
     if level.is_none() {
         bail!("Unexpected initial level {:?}", level);
     }
@@ -125,19 +123,17 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
     debug!("Waiting for initial break pulse...");
     // Wait for a long pulse to start.
     let mut last_pulse = Duration::default();
-    while let Some(level) = rx_pin.poll_interrupt(false, None)? {
+    while let Some(level) = poller.poll(isize::MAX)? {
         let timestamp = Instant::now();
         let pulse_length = timestamp - last_timestamp;
         last_timestamp = timestamp;
 
-        if level == Level::High && pulse_length > BREAK_PULSE_LENGTH {
+        if level != 0 && pulse_length > BREAK_PULSE_LENGTH {
             trace!(
                 "Found possible initial break pulse {} μs.",
                 pulse_length.as_micros()
             );
-        } else if level == Level::Low
-            && last_pulse > BREAK_PULSE_LENGTH
-            && pulse_length < BREAK_PULSE_LENGTH
+        } else if level == 0 && last_pulse > BREAK_PULSE_LENGTH && pulse_length < BREAK_PULSE_LENGTH
         {
             debug!(
                 "Found initial break pulse {} μs and first pulse {} μs.",
@@ -169,7 +165,8 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
     }
 
     debug!("Reading pulses...");
-    while let Some(level) = rx_pin.poll_interrupt(false, Some(MAX_PULSE_LENGTH))? {
+    let max_pulse_length_ms = MAX_PULSE_LENGTH.as_millis().try_into().unwrap();
+    while let Some(level) = poller.poll(max_pulse_length_ms)? {
         let timestamp = Instant::now();
         let pulse_length = timestamp - last_timestamp;
         pulses.push(
