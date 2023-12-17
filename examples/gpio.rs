@@ -4,7 +4,10 @@
 
 use std::time::{Duration, Instant};
 
-use cc1101::{lowlevel::registers::Config, Cc1101, Modulation, RadioMode, SyncMode};
+use cc1101::{
+    lowlevel::types::AutoCalibration, Cc1101, FilterLength, Modulation, RadioMode, SyncMode,
+    TargetAmplitude,
+};
 use eyre::{bail, eyre, Context, Report};
 use linux_embedded_hal::{
     spidev::{SpiModeFlags, SpidevOptions},
@@ -52,16 +55,13 @@ fn main() -> Result<(), Report> {
     cc1101
         .set_frequency(433940000)
         .map_err(|e| eyre!("Error setting frequency: {:?}", e))?;
+    cc1101.set_raw_mode().unwrap();
 
-    // Serial data output.
-    cc1101.0.write_register(Config::IOCFG0, 0x0d).unwrap();
-    // Disable data whitening and CRC, fixed packet length, asynchronous serial mode.
-    cc1101.0.write_register(Config::PKTCTRL0, 0x30).unwrap();
     //cc1101.0.write_register(Config::PKTLEN, 0x04).unwrap();
     // Frequency synthesizer offset (0x00 reset value).
     //cc1101.0.write_register(Config::FSCTRL0, 0x00).unwrap();
     // Frequency synthesizer IF 211 kHz. Doesn't seem to affect big button, but affects sensitivity to small remote.
-    cc1101.0.write_register(Config::FSCTRL1, 0x06).unwrap();
+    cc1101.set_synthesizer_if(152_300).unwrap();
     // Channel spacing. (Seems irrelevant, default value.)
     //cc1101.0.write_register(Config::MDMCFG0, 0xf8).unwrap();
     // FEC disabled, 4 preamble bytes, 2 bit exponent of channel spacing. (Seems irrelevant, default value.)
@@ -72,19 +72,24 @@ fn main() -> Result<(), Report> {
     // Channel bandwidth and data rate.
     cc1101.set_chanbw(232_000).unwrap();
     cc1101.set_data_rate(3_000).unwrap();
-    // Automatically calibrate when going from IDLE to RX or TX, XOSC stable timeout 64.
-    cc1101.0.write_register(Config::MCSM0, 0x18).unwrap();
+    // Automatically calibrate when going from IDLE to RX or TX.
+    // XOSC stable timeout was being set to 64, but this doesn't seem important.
+    cc1101
+        .set_autocalibration(AutoCalibration::FromIdle)
+        .unwrap();
     // Clear channel indication always, RX off mode idle, TX off mode idle.
     //cc1101.0.write_register(Config::MCSM1, 0x00).unwrap();
     // RX timeout. (Seems irrelevant, default value.)
     //cc1101.0.write_register(Config::MCSM2, 0x07).unwrap();
-    // Medium hysteresis, 18 channel filter samples, normal operation, OOK decision boundary 12 dB. Seems to affect sensitivity to small remote.
-    cc1101.0.write_register(Config::AGCCTRL0, 0x92).unwrap();
+    // Medium hysteresis, 16 channel filter samples, normal operation, OOK decision boundary 12 dB. Seems to affect sensitivity to small remote.
+    cc1101
+        .set_agc_filter_length(FilterLength::Samples32)
+        .unwrap();
     // LNA2 gain decreased first, relative carrier sense threshold disabled, absolute RSSI threshold at target setting.
     //cc1101.0.write_register(Config::AGCCTRL1, 0x00).unwrap();
     // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
-    // TODO: 0x04 or 0x07? 0x04 seems to let some noise through. Default value lets noise through all the time.
-    cc1101.0.write_register(Config::AGCCTRL2, 0x07).unwrap();
+    // TODO: 36 dB or 42 dB.unwrap() 36 dB seems to let some noise through. Default value lets noise through all the time.
+    cc1101.set_agc_target(TargetAmplitude::Db42).unwrap();
     // Front-end TX current configuration.
     //cc1101.0.write_register(Config::FREND0, 0x11).unwrap();
     // Front-end RX current configuration. Unclear whether this affects sensitivity.
