@@ -13,10 +13,11 @@ categories = ["hardware-support", "parser-implementations"]
 thiserror = "1.0.30"
 
 [dev-dependencies]
-cc1101 = { git = "https://github.com/qwandor/cc1101", features = ["std"] }
+cc1101 = { version = "0.1.3", features = ["std"] }
 color-backtrace = "0.6.1"
 color-eyre = "0.6.2"
+embedded-hal-bus = { version = "0.1.0", features = ["std"] }
 eyre = "0.6.9"
 log = "0.4.20"
 pretty_env_logger = "0.5.0"
-rppal = { version = "0.16.0", features = ["hal"] }
+rppal = { version = "0.17.1", features = ["hal"] }
