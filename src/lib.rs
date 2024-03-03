@@ -73,7 +73,7 @@ pub fn decode(pulses: &[u16]) -> Result<Code, Error> {
             value = value << 1 | 1;
             length += 1;
         } else if high_period == 1 && low_period == 3 {
-            value = value << 1;
+            value <<= 1;
             length += 1;
         } else if high > BREAK_PULSE_LENGTH || low > BREAK_PULSE_LENGTH {
             break;
