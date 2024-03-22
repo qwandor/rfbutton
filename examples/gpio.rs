@@ -38,7 +38,9 @@ fn main() -> Result<(), Report> {
     let spi = ExclusiveDevice::new(spibus, cs, Delay);
     let mut cc1101 =
         Cc1101::new(spi).map_err(|e| eyre!("Error creating CC1101 device: {:?}", e))?;
-    cc1101.reset().unwrap();
+    cc1101
+        .reset()
+        .map_err(|e| eyre!("Error resetting CC1101 device: {:?}", e))?;
     let (partnum, version) = cc1101
         .get_hw_info()
         .map_err(|e| eyre!("Error getting hardware info: {:?}", e))?;
