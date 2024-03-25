@@ -27,7 +27,7 @@ pub enum Error {
 }
 
 /// A decoded RF button code.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Code {
     /// The decoded value.
     pub value: u32,
@@ -42,6 +42,44 @@ impl Debug for Code {
             "{:#x} {:#026b} ({} bits)",
             self.value, self.value, self.length
         )
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Code {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s.len() > 8 {
+            return Err(serde::de::Error::invalid_value(
+                serde::de::Unexpected::Str(&s),
+                &"no more than 8 characters",
+            ));
+        }
+        let value =
+            u32::from_str_radix(&s, 16).map_err(|e| serde::de::Error::custom(e.to_string()))?;
+        Ok(Self {
+            value,
+            length: s.len() as u8 * 4,
+        })
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Code {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if self.length % 4 != 0 {
+            return Err(serde::ser::Error::custom(
+                "Only codes with length a multiple of 4 can be serialized.",
+            ));
+        }
+        let s = format!("{:01$x}", self.value, usize::from(self.length) / 4);
+        serializer.serialize_str(&s)
     }
 }
 
@@ -151,6 +189,48 @@ mod tests {
                 value: 0x48b2a4,
                 length: 24
             })
+        );
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn serde_code() {
+        use serde_test::{assert_tokens, Token};
+
+        assert_tokens(
+            &Code {
+                value: 0,
+                length: 12,
+            },
+            &[Token::Str("000")],
+        );
+        assert_tokens(
+            &Code {
+                value: 0xf,
+                length: 4,
+            },
+            &[Token::Str("f")],
+        );
+        assert_tokens(
+            &Code {
+                value: 0x123456,
+                length: 24,
+            },
+            &[Token::Str("123456")],
+        );
+        assert_tokens(
+            &Code {
+                value: 0xabcdef,
+                length: 24,
+            },
+            &[Token::Str("abcdef")],
+        );
+        assert_tokens(
+            &Code {
+                value: 0xff112233,
+                length: 32,
+            },
+            &[Token::Str("ff112233")],
         );
     }
 }

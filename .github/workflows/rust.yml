@@ -14,10 +14,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Build
+      - name: Build with all features
         run: cargo build --all-features
-      - name: Run tests
+      - name: Run tests with all features
         run: cargo test --all-features
+      - name: Build with no features
+        run: cargo build --no-default-features
+      - name: Run tests with no features
+        run: cargo test --no-default-features
       - name: Run clippy
         uses: actions-rs/clippy-check@v1
         with:
