@@ -27,7 +27,7 @@ pub enum Error {
 }
 
 /// A decoded RF button code.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, Hash, PartialEq)]
 pub struct Code {
     /// The decoded value.
     pub value: u32,
