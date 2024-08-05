@@ -2,7 +2,7 @@
 // This project is dual-licensed under Apache 2.0 and MIT terms.
 // See LICENSE-APACHE and LICENSE-MIT for details.
 
-use std::time::{Duration, Instant};
+//! An example using a CC1101 module connected to a Raspberry Pi.
 
 use cc1101::{
     lowlevel::types::AutoCalibration, Cc1101, FilterLength, Modulation, RadioMode, SyncMode,
@@ -17,9 +17,11 @@ use rppal::{
     hal::Delay,
     spi::{Bus, Mode, SlaveSelect, Spi},
 };
+use std::time::{Duration, Instant};
 
-/// The GPIO pin to which the 433 MHz receiver's data pin is connected.
+/// The GPIO pin to which the CC1101 433 MHz receiver's data pin is connected.
 const RX_PIN: u8 = 27;
+/// The GPIO pin to which the CC1101's SPI chip select pin is connected.
 const CS_PIN: u8 = 25;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
