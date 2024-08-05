@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Other changes
+
+- Implemented `Copy` for `Code`.
+
 ## 0.1.1
 
 ### New features
