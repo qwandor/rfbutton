@@ -1,26 +1,33 @@
-// Copyright 2023 the rfbutton authors.
+// Copyright 2024 the rfbutton authors.
 // This project is dual-licensed under Apache 2.0 and MIT terms.
 // See LICENSE-APACHE and LICENSE-MIT for details.
 
-use std::time::{Duration, Instant};
+//! An example using an RFM69 module (such as the Adafruit Radio Bonnet) connected to a Raspberry
+//! Pi.
 
-use cc1101::{
-    lowlevel::types::AutoCalibration, Cc1101, FilterLength, Modulation, RadioMode, SyncMode,
-    TargetAmplitude,
-};
-use embedded_hal_bus::spi::ExclusiveDevice;
-use eyre::{bail, eyre, Context, Report};
+use eyre::{bail, Context, Report};
 use log::{debug, trace};
 use rfbutton::decode;
+use rfm69::{
+    registers::{
+        DataMode, DccCutoff, DioMapping, DioMode, DioPin, DioType, LnaConfig, LnaGain,
+        LnaImpedance, Mode, Modulation, ModulationShaping, ModulationType, RxBw, RxBwOok,
+    },
+    Rfm69,
+};
 use rppal::{
     gpio::{Gpio, InputPin, Level, Trigger},
-    hal::Delay,
-    spi::{Bus, Mode, SlaveSelect, Spi},
+    spi::{self, Bus, SimpleHalSpiDevice, SlaveSelect, Spi},
+};
+use std::{
+    thread::sleep,
+    time::{Duration, Instant},
 };
 
-/// The GPIO pin to which the 433 MHz receiver's data pin is connected.
+/// The GPIO pin to which the RFM69's data pin is connected.
 const RX_PIN: u8 = 27;
-const CS_PIN: u8 = 25;
+/// The GPIO pin to which the RFM69's reset pin is connected.
+const RESET_PIN: u8 = 25;
 
 const MAX_PULSE_LENGTH: Duration = Duration::from_millis(10);
 const BREAK_PULSE_LENGTH: Duration = Duration::from_millis(7);
@@ -32,59 +39,58 @@ fn main() -> Result<(), Report> {
 
     let gpio = Gpio::new()?;
     let mut rx_pin = gpio.get(RX_PIN)?.into_input();
+    let mut reset_pin = gpio.get(RESET_PIN)?.into_output();
 
-    let cs = gpio.get(CS_PIN)?.into_output();
-    let spibus = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
-    let spi = ExclusiveDevice::new(spibus, cs, Delay)?;
-    let mut cc1101 =
-        Cc1101::new(spi).map_err(|e| eyre!("Error creating CC1101 device: {:?}", e))?;
-    cc1101
-        .reset()
-        .map_err(|e| eyre!("Error resetting CC1101 device: {:?}", e))?;
-    let (partnum, version) = cc1101
-        .get_hw_info()
-        .map_err(|e| eyre!("Error getting hardware info: {:?}", e))?;
-    println!("Part number {}, version {}", partnum, version);
-    cc1101
-        .set_frequency(433940000)
-        .map_err(|e| eyre!("Error setting frequency: {:?}", e))?;
-    cc1101.set_raw_mode().map_err(|e| eyre!("{:?}", e))?;
+    // Reset the radio.
+    reset_pin.set_high();
+    sleep(Duration::from_millis(1));
+    reset_pin.set_low();
+    sleep(Duration::from_millis(5));
 
-    // Frequency synthesizer IF 211 kHz. Doesn't seem to affect big button, but affects sensitivity to small remote.
-    cc1101
-        .set_synthesizer_if(152_300)
-        .map_err(|e| eyre!("{:?}", e))?;
-    // DC blocking filter enabled, OOK modulation, manchester encoding disabled, no preamble/sync.
-    cc1101
-        .set_sync_mode(SyncMode::Disabled)
-        .map_err(|e| eyre!("{:?}", e))?;
-    cc1101
-        .set_modulation(Modulation::OnOffKeying)
-        .map_err(|e| eyre!("{:?}", e))?;
-    // Channel bandwidth and data rate.
-    cc1101.set_chanbw(232_000).map_err(|e| eyre!("{:?}", e))?;
-    cc1101.set_data_rate(3_000).map_err(|e| eyre!("{:?}", e))?;
-    // Automatically calibrate when going from IDLE to RX or TX.
-    // XOSC stable timeout was being set to 64, but this doesn't seem important.
-    cc1101
-        .set_autocalibration(AutoCalibration::FromIdle)
-        .map_err(|e| eyre!("{:?}", e))?;
-    // Medium hysteresis, 16 channel filter samples, normal operation, OOK decision boundary 12 dB. Seems to affect sensitivity to small remote.
-    cc1101
-        .set_agc_filter_length(FilterLength::Samples32)
-        .map_err(|e| eyre!("{:?}", e))?;
-    // All gain settings can be used, maximum possible LNA gain, 36 dB target value.
-    // TODO: 36 dB or 42 dB? 36 dB seems to let some noise through. Default value lets noise through all the time.
-    cc1101
-        .set_agc_target(TargetAmplitude::Db42)
-        .map_err(|e| eyre!("{:?}", e))?;
-    // Front-end RX current configuration. Unclear whether this affects sensitivity.
-    //cc1101.0.write_register(Config::FREND1, 0xb6)?;
-    cc1101
-        .set_radio_mode(RadioMode::Receive)
-        .map_err(|e| eyre!("{:?}", e))?;
+    let spi = SimpleHalSpiDevice::new(Spi::new(
+        Bus::Spi0,
+        SlaveSelect::Ss1,
+        1_000_000,
+        spi::Mode::Mode0,
+    )?);
+    let mut rfm = Rfm69::new(spi);
+    rfm.frequency(433_850_000).unwrap();
+    rfm.rssi_threshold(175).unwrap();
+    rfm.lna(LnaConfig {
+        zin: LnaImpedance::Ohm200,
+        gain_select: LnaGain::AgcLoop,
+    })
+    .unwrap();
+    rfm.rx_bw(RxBw {
+        dcc_cutoff: DccCutoff::Percent4,
+        rx_bw: RxBwOok::Khz200dot0,
+    })
+    .unwrap();
+    rfm.modulation(Modulation {
+        data_mode: DataMode::Packet,
+        modulation_type: ModulationType::Ook,
+        shaping: ModulationShaping::Shaping00,
+    })
+    .unwrap();
+    rfm.dio_mapping(DioMapping {
+        pin: DioPin::Dio2,
+        dio_type: DioType::Dio01, // Data
+        dio_mode: DioMode::Rx,
+    })
+    .unwrap();
+    rfm.dio_mapping(DioMapping {
+        pin: DioPin::Dio3,
+        dio_type: DioType::Dio01, // RSSI
+        dio_mode: DioMode::Rx,
+    })
+    .unwrap();
 
-    println!("Set up CC1101, enabling interrupts...");
+    rfm.mode(Mode::Receiver).unwrap();
+    while !rfm.is_mode_ready().unwrap() {
+        sleep(Duration::from_millis(1));
+    }
+
+    println!("Set up RFM69, enabling interrupts...");
 
     rx_pin.set_interrupt(Trigger::Both)?;
 
