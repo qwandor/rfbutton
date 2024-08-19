@@ -13,7 +13,7 @@ use eyre::{bail, eyre, Context, Report};
 use log::{debug, trace};
 use rfbutton::decode;
 use rppal::{
-    gpio::{Gpio, InputPin, Level, Trigger},
+    gpio::{Event, Gpio, InputPin, Level, Trigger},
     hal::Delay,
     spi::{Bus, Mode, SlaveSelect, Spi},
 };
@@ -86,7 +86,7 @@ fn main() -> Result<(), Report> {
 
     println!("Set up CC1101, enabling interrupts...");
 
-    rx_pin.set_interrupt(Trigger::Both)?;
+    rx_pin.set_interrupt(Trigger::Both, None)?;
 
     loop {
         match receive(&mut rx_pin) {
@@ -133,17 +133,17 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
     debug!("Waiting for initial break pulse...");
     // Wait for a long pulse to start.
     let mut last_pulse = Duration::default();
-    while let Some(level) = rx_pin.poll_interrupt(false, None)? {
+    while let Some(event) = rx_pin.poll_interrupt(false, None)? {
         let timestamp = Instant::now();
         let pulse_length = timestamp - last_timestamp;
         last_timestamp = timestamp;
 
-        if level == Level::High && pulse_length > BREAK_PULSE_LENGTH {
+        if event.trigger == Trigger::RisingEdge && pulse_length > BREAK_PULSE_LENGTH {
             trace!(
                 "Found possible initial break pulse {} μs.",
                 pulse_length.as_micros()
             );
-        } else if level == Level::Low
+        } else if event.trigger == Trigger::FallingEdge
             && last_pulse > BREAK_PULSE_LENGTH
             && pulse_length < BREAK_PULSE_LENGTH
         {
@@ -169,7 +169,7 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
             trace!(
                 "Ignoring {} μs {:?} pulse.",
                 pulse_length.as_micros(),
-                !level
+                previous_level(&event),
             );
         }
 
@@ -177,7 +177,7 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
     }
 
     debug!("Reading pulses...");
-    while let Some(level) = rx_pin.poll_interrupt(false, Some(MAX_PULSE_LENGTH))? {
+    while let Some(event) = rx_pin.poll_interrupt(false, Some(MAX_PULSE_LENGTH))? {
         let timestamp = Instant::now();
         let pulse_length = timestamp - last_timestamp;
         pulses.push(
@@ -189,8 +189,8 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
         if pulse_length > BREAK_PULSE_LENGTH {
             debug!(
                 "Found final {:?} break pulse {} μs.",
-                !level,
-                pulse_length.as_micros()
+                previous_level(&event),
+                pulse_length.as_micros(),
             );
             break;
         }
@@ -198,4 +198,13 @@ fn receive(rx_pin: &mut InputPin) -> Result<Vec<u16>, Report> {
     }
 
     Ok(pulses)
+}
+
+/// Given an interreupt, returns the level of the pin before the interrupt trigger.
+fn previous_level(event: &Event) -> Level {
+    if event.trigger == Trigger::RisingEdge {
+        Level::Low
+    } else {
+        Level::High
+    }
 }
