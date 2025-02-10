@@ -15,7 +15,7 @@ serde = { version = "1.0.197", optional = true }
 
 [dev-dependencies]
 cc1101 = { version = "0.1.3", features = ["std"] }
-color-backtrace = "0.6.1"
+color-backtrace = "0.7.0"
 color-eyre = "0.6.2"
 embedded-hal-bus = { version = "0.3.0", features = ["std"] }
 eyre = "0.6.9"
