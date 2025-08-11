@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build with all features
         run: cargo build --all-features
       - name: Run tests with all features
@@ -33,7 +33,7 @@ jobs:
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
