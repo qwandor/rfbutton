@@ -10,7 +10,7 @@ keywords = ["rf", "433mhz"]
 categories = ["hardware-support", "parser-implementations"]
 
 [dependencies]
-thiserror = "2.0.15"
+thiserror = "2.0.16"
 serde = { version = "1.0.219", optional = true }
 
 [dev-dependencies]
